@@ -17,8 +17,15 @@ data_f <- tbl_df(data_f)
 ########################################################################################################
 
 # Application title
-
-ui <- dashboardPage()
+# Shiny UI -------
+ui <- fluidPage(
+  theme = "bootstrap.css",
+  includeCSS("www/styles.css"),
+  
+navbarPage(
+  "The US police shootings",
+  id = "main_navbar"
+))
 ###############################################################################################################
 #The server starts here
 

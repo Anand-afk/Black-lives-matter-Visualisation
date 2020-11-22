@@ -12,16 +12,13 @@ data_f <- read.csv('fatal-police-shootings-data.csv',stringsAsFactors = F,header
 data_f <- tbl_df(data_f)
 
 
-
-
-
 data_f$race[data_f$race == "A"] <- "asian"
 data_f$race[data_f$race == "W"] <- "white"
 data_f$race[data_f$race == "B"] <- "black"
 data_f$race[data_f$race == "N"] <- "NAmerica"
 data_f$race[data_f$race == "H"] <- "hispanic"
-data_f$race[data_f$race == "O"] <- "black"
-data_f$race[data_f$race == ""] <- "black"
+data_f$race[data_f$race == "O"] <- "other"
+data_f$race[data_f$race == ""] <- "other"
 
 
 race<-levels(factor(data_f$race))
@@ -63,13 +60,21 @@ data_f$gender[data_f$gender == "F"] <- "Female"
 data_f$gender[data_f$gender == ""]<-"Other"
 
 
-levels(factor(data_f$gender))
+data_f$flee[data_f$flee == "Car"] <- "Fleeing"
+data_f$flee[data_f$flee == "Foot"]<-"Fleeing"
+data_f$flee[data_f$flee == "Other"]<-"Not fleeing"
+data_f$flee[data_f$flee == ""]<-"Not fleeing"
+
+levels(factor(data_f$body_camera))
+
+data_f$body_camera[data_f$body_camera == "False"] <- "off"
+data_f$body_camera[data_f$body_camera == "True"] <- "on"
 
 
 weapons<-levels(factor(data_f$armed))
 # club_names<-levels(factor(data_f$Club))
 #updating the dataframe with only the required columns
-
+threat=levels(factor(data_f$threat_level))
 
 #deadly weapons used
 deadly<- c('gun','nail gun','vehicle', 'sword', 'lawn mower blade', 'cordless drill', 'bean-bag gun', 'gun and knife',
@@ -88,20 +93,22 @@ data_f$weapon[data_f$armed %notin% deadly]<-"nondeadly"
 ########################################################################################################
 
 # 
-header <- dashboardHeader(title = "US Police Shootings")
+header <- dashboardHeader(title = "All Lives Matter")
 
 # Sidebar with a slider input for number of bins 
 sidebar <- dashboardSidebar(
   sidebarMenu(id = "tabs",
               menuItem("Weapons across races", tabName = "weapons", icon = icon("dashboard")),
-              menuItem("Armed and unarmed", tabName = "arms", icon = icon("dashboard"))
+              menuItem("Armed and unarmed", tabName = "arms", icon = icon("dashboard")),
+              menuItem("Camera on and off", tabName = "camera", icon=icon("dashboard")),
+              menuItem("Density Globe", tabName = "map", icon=icon("dashboard"))
   ))
 
 body <- dashboardBody(tabItems(
   tabItem(
     #tab number 1
     tabName = "weapons",
-    h3("Weapons used by criminals"),
+    h3("Weapons used by suspects across different race before shooting"),
     tags$br(),
     sidebarMenu(
       selectInput(
@@ -131,18 +138,12 @@ body <- dashboardBody(tabItems(
         width = 4,
         uiOutput("img"),
         tags$br(),
-        verbatimTextOutput("click")
+        verbatimTextOutput("click1")
       )
     )
   ),
   tabItem(tabName = "arms",
-          tabsetPanel(
-            id = "tabs",
-            #subtab no. 1
-            tabPanel(
-              title = "Armed and unarmed",
-              value = "page1",
-              h3("Armed and unarmed"),
+              h3("Did race play a role when they were unarmed/(non deadly weapons)"),
               sidebarMenu(
                 radioButtons("rad1", "Choose:", c("Male" = "male", "Female" = "female"),selected = "male"),
                 selectInput(
@@ -161,12 +162,44 @@ body <- dashboardBody(tabItems(
                 ),
                 column(
                   width = 6,
-                  dataTableOutput("click1")
+                  dataTableOutput("click2")
                 )
               )
-            )
-          )
-  )
+  ),
+  tabItem(tabName = "camera",
+            h3("Did the criminal try to flee and given what circumstances"),
+              sidebarMenu(
+                radioButtons("rad2", "Body Camera:", c("On" = "on", "Off" = "off"),selected = "off"),
+                selectInput(
+                  inputId = "threat",
+                  label = "Threat level:",
+                  choices = threat,
+                  selected = "attack",
+                  selectize = FALSE
+                )
+              ),
+              fluidRow(
+                column(
+                  width = 5,
+                  tags$br(),
+                  plotlyOutput("plot3")
+                ),
+                column(
+                  width = 6,
+                  dataTableOutput("click3")
+                )
+              )
+  ),
+  tabItem(tabName = "map",
+          h3("Density of deaths all over USA."),
+          fluidRow(column( 
+            width = 12,
+            plotlyOutput('map')
+          ),
+          tags$br(),
+          column(width = 6),
+          dataTableOutput('click4')
+          ))
 )
 )
 
@@ -176,7 +209,7 @@ ui <- dashboardPage(skin = "purple",
                     sidebar,
                     body
 )
-###############################################################################################################
+######################################################################################################################################################################
 #The server starts here
 
 server <- function(input, output) {
@@ -197,11 +230,21 @@ server <- function(input, output) {
         filter(gender == "Female")}
   })
   
+  tab3 <- reactive({
+    if (input$rad2 == "on"){
+      x <- data_f %>%
+        filter(body_camera == "on")
+    }
+    else if (input$rad2 == "off"){
+      x <- data_f %>%
+        filter(body_camera == "off")}
+  })
+  
   plotHist = function(x,y){
     output$plot1 <- renderPlotly({plot_ly(x=x, y=y, type = "bar") %>%
         layout(title = "Stats: ",
-               xaxis = list(title = ""),
-               yaxis = list(title = ""))
+               xaxis = list(title = "Names of the criminals/suspects"),
+               yaxis = list(title = "Age"))
       
     })
   }
@@ -216,8 +259,30 @@ server <- function(input, output) {
                yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))})
   }
   
+  
+  plotbone=function(data_f){
+    
+    a<-table(data_f$race,data_f$flee)
+    a<-as.data.frame.matrix(a)
+    position<-c('asian','black','hispanic','NAmerica','other','white')
+    data <- data.frame(position, a['Fleeing'], a['Not fleeing'])
+    data['Gap']=a['Not fleeing']-a['Fleeing']
+    data
+    output$plot3<-renderPlotly({plot_ly(data, color = I("gray80")) %>%
+        add_segments(x = ~Fleeing, xend = ~Not.fleeing, y = ~position, yend = ~position, showlegend = FALSE) %>%
+        add_markers(x = ~Fleeing, y = ~position, name = "Fleeing", color = I("pink")) %>%
+        add_markers(x = ~Not.fleeing, y = ~position, name = "Not Fleeing", color = I("blue")) %>%
+        layout(
+          title = "Fleeing vs not fleeing",
+          xaxis = list(title = "Number of deaths"),
+          margin = list(l = 65)
+        )})}
+  
+  
+  
+  
   #print the basic details of the player below the photo from above
-  output$click <- renderPrint({
+  output$click1 <- renderPrint({
     res<-tab1()
     d <- event_data("plotly_click")
     if (is.null(d)) paste("Click on the bar to see the list of criminals" )
@@ -231,13 +296,47 @@ server <- function(input, output) {
     
   })
   
+  
+  output$click3 <- renderDataTable({
+    ez <- event_data("plotly_click")
+    if (is.null(ez)) paste("Click on either of the points" )
+    else {vars<-c(ez)
+    if (vars[1]==1){
+      re<-tab3()
+      re<-re%>% filter(threat_level == input$threat)
+      rowix<-re%>%filter(race==vars[4],flee=="Fleeing")
+      rowix%>%
+        select(name,manner_of_death,age,gender,city,state)%>%
+        datatable(class = "nowrap hover row-border", escape = FALSE, 
+                  options = list(dom = 't',scrollX = TRUE, autoWidth = TRUE))
+    }
+    else if (vars[1]==2){
+      re<-tab3()
+      rowix<-re%>%filter(race==vars[4],flee=="Not fleeing")
+      rowix%>%
+        select(name,manner_of_death,age,gender,city,state)%>%
+        datatable(class = "nowrap hover row-border", escape = FALSE, 
+                  options = list(dom = 't',scrollX = TRUE, autoWidth = TRUE))
+    }
+    }
+  })
+  
+  
+
+  observeEvent(input$threat, {
+    r<-tab3()
+  r<-r%>% filter(threat_level == input$threat)
+  plotbone(r)
+  })
+  
+  
   observeEvent(input$race, 
                {resi<-tab2()
                resi<-resi%>% filter(race == input$race)
                plotpie(resi)})
   
   # rendering the datatable, when the user clicks on the pie chart in the third tab
-  output$click1 <- renderDataTable({
+  output$click2 <- renderDataTable({
     e <- event_data("plotly_click")
     resik<-tab2()
     resik<-resik%>% filter(race == input$race)
@@ -260,7 +359,40 @@ server <- function(input, output) {
     }
   })
   
+  # to plot the density globe on the 4th tab
+  dfg<-as.data.frame(table(data_f$state))
+  dfg
+# dfg['code']=countrycode(dfg$Var1, 'country.name', 'iso3c')
+ dfg['id']=c(0,1:50)
+  l <- list(color = toRGB("black"), width = 0.5)
+  g <- list(
+    showframe = FALSE,
+    showcoastlines = FALSE,
+    projection = list(type = 'albers usa')
+  )
+  output$map<- renderPlotly({plot_geo(dfg, locationmode = 'USA-states') %>%
+      add_trace(
+        z = ~Freq, color = ~Freq, colors = 'Blues',
+        text = ~Var1, locations = ~Var1, marker = list(line = l)
+      ) %>%
+      colorbar(title = 'Number of players', tickprefix = '') %>%
+      layout(
+        geo = g
+      )})
   
+  # for displaying data table when clicked on the country on the density globe.
+  output$click4 <- renderDataTable({
+    e <- event_data("plotly_click")
+    if (is.null(e)) paste("Click on a Player bar to view the name" )
+    else {vars<-c(e)
+    rom<-dfg%>% filter(vars[2]==id)
+    rex<-data_f%>% filter(state == rom$Var1)
+    rex %>%
+      select(name,manner_of_death,age,gender,city,state)%>%
+      datatable(class = "nowrap hover row-border", escape = FALSE, 
+                options = list(dom = 't',scrollX = TRUE, autoWidth = TRUE))
+    }
+  })    
   
   
   observeEvent(input$white, {res<-tab1()

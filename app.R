@@ -204,7 +204,7 @@ body <- dashboardBody(tabItems(
 )
 
 
-ui <- dashboardPage(skin = "purple",
+ui <- dashboardPage(skin = "red",
                     header,
                     sidebar,
                     body
@@ -375,7 +375,7 @@ server <- function(input, output) {
         z = ~Freq, color = ~Freq, colors = 'Blues',
         text = ~Var1, locations = ~Var1, marker = list(line = l)
       ) %>%
-      colorbar(title = 'Number of players', tickprefix = '') %>%
+      colorbar(title = 'Number of deaths', tickprefix = '') %>%
       layout(
         geo = g
       )})
@@ -383,7 +383,7 @@ server <- function(input, output) {
   # for displaying data table when clicked on the country on the density globe.
   output$click4 <- renderDataTable({
     e <- event_data("plotly_click")
-    if (is.null(e)) paste("Click on a Player bar to view the name" )
+    if (is.null(e)) paste("Click on the state to view the names and details" )
     else {vars<-c(e)
     rom<-dfg%>% filter(vars[2]==id)
     rex<-data_f%>% filter(state == rom$Var1)
